@@ -1,21 +1,22 @@
+// Dashboard — main page view.
+// All data-fetching logic, filtering, and action handlers are preserved exactly.
+// Only the JSX structure and class names changed for the redesign.
+
 import { useReducer, useState, useEffect } from 'react';
 import { getIssues, getStats, deleteIssue } from '../services/issueService.js';
-import StatCard from '../components/StatCard.jsx';
-import IssueCard from '../components/IssueCard.jsx';
-import FilterBar from '../components/FilterBar.jsx';
-import IssueForm from '../components/IssueForm.jsx';
+import IssueCard   from '../components/IssueCard.jsx';
+import FilterBar   from '../components/FilterBar.jsx';
+import IssueForm   from '../components/IssueForm.jsx';
 import IssueDetail from '../components/IssueDetail.jsx';
 import ConfirmModal from '../components/ConfirmModal.jsx';
 
 const EMPTY_FILTERS = { search: '', status: '', priority: '', type: '' };
 
-// ── Tiny fetch reducer ──────────────────────────────────────────
-// All setState happens inside dispatch calls, which React Compiler
-// rules treat as external-system updates rather than synchronous
-// state derivation.
+// ── Fetch reducer ────────────────────────────────────────────────
+// Keeps all setState inside dispatch — satisfies react-hooks/set-state-in-effect.
 function fetchReducer(state, action) {
   switch (action.type) {
-    case 'loading': return { data: state.data, loading: true, error: '' };
+    case 'loading': return { data: state.data, loading: true,  error: '' };
     case 'success': return { data: action.payload, loading: false, error: '' };
     case 'error':   return { data: state.data,   loading: false, error: action.payload };
     default:        return state;
@@ -23,7 +24,18 @@ function fetchReducer(state, action) {
 }
 const FETCH_INIT = { data: null, loading: true, error: '' };
 
-export default function Dashboard({ openCreate, onCreateClose }) {
+// ── Stats strip configuration ─────────────────────────────────────
+// stat-accent maps to a CSS custom property used for the left accent bar.
+const STAT_ITEMS = [
+  { key: 'total',       label: 'Total',       accent: '#5b4ef8' },
+  { key: 'open',        label: 'Open',        accent: '#3b82f6' },
+  { key: 'in_progress', label: 'In Progress', accent: '#f59e0b' },
+  { key: 'resolved',    label: 'Resolved',    accent: '#22c55e' },
+  { key: 'closed',      label: 'Closed',      accent: '#94a3b8' },
+];
+
+export default function Dashboard({ openCreate, onCreateClose, onCreateOpen }) {
+  // ── Data fetching ──────────────────────────────────────────────
   const [refreshKey, setRefreshKey] = useState(0);
   const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -45,28 +57,31 @@ export default function Dashboard({ openCreate, onCreateClose }) {
   const issueList = issuesState.data ?? [];
   const stats     = statsState.data;
 
-  const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
+  // ── Local UI state ─────────────────────────────────────────────
+  const [filters,      setFilters]      = useState({ ...EMPTY_FILTERS });
   const [selectedIssue, setSelectedIssue] = useState(null);
-  const [editIssue, setEditIssue] = useState(null);
+  const [editIssue,    setEditIssue]    = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [toast, setToast] = useState('');
+  const [deleting,     setDeleting]     = useState(false);
+  const [toast,        setToast]        = useState('');
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(() => setToast(''), 3000);
   };
 
-  // Client-side filtering — operates on real fetched data
+  // ── Client-side filtering ──────────────────────────────────────
   const filtered = issueList.filter((issue) => {
-    if (filters.search && !issue.title.toLowerCase().includes(filters.search.toLowerCase()))
+    if (filters.search &&
+        !issue.title.toLowerCase().includes(filters.search.toLowerCase()))
       return false;
-    if (filters.status && issue.status !== filters.status) return false;
+    if (filters.status   && issue.status   !== filters.status)   return false;
     if (filters.priority && issue.priority !== filters.priority) return false;
-    if (filters.type && issue.type !== filters.type) return false;
+    if (filters.type     && issue.type     !== filters.type)     return false;
     return true;
   });
 
+  // ── Handlers ───────────────────────────────────────────────────
   async function handleDelete() {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -90,74 +105,158 @@ export default function Dashboard({ openCreate, onCreateClose }) {
     refresh();
   }
 
+  // ── Render ─────────────────────────────────────────────────────
   return (
-    <main className="dashboard">
-      {/* ── Stats ─────────────────────────────────────────── */}
-      <section className="stats-section" aria-label="Issue statistics">
-        <h2 className="section-title">Overview</h2>
-        {statsState.error && (
-          <p className="inline-error">Could not load stats: {statsState.error}</p>
-        )}
-        <div className="stats-grid">
-          <StatCard label="Total Issues" value={statsState.loading ? '…' : stats?.total} accent="#6d28d9" />
-          <StatCard label="Open"         value={statsState.loading ? '…' : stats?.open}  accent="#1d4ed8" />
-          <StatCard label="In Progress"  value={statsState.loading ? '…' : stats?.in_progress} accent="#a16207" />
-          <StatCard label="Resolved"     value={statsState.loading ? '…' : stats?.resolved}    accent="#15803d" />
-          <StatCard label="Closed"       value={statsState.loading ? '…' : stats?.closed}      accent="#374151" />
+    <div className="page">
+
+      {/* ── Page header ─────────────────────────────────────── */}
+      <header className="page-header">
+        <div className="page-header-left">
+          <span className="page-eyebrow">Workspace</span>
+          <h1 className="page-title">Issues</h1>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={onCreateOpen}
+          aria-label="Create new issue"
+        >
+          {/* Plus icon */}
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+            aria-hidden="true" focusable="false">
+            <path d="M6 1v10M1 6h10"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          New Issue
+        </button>
+      </header>
+
+      {/* ── Stats strip ─────────────────────────────────────── */}
+      {statsState.error && (
+        <div className="alert alert-error" role="alert">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+            aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M7 4v3.5M7 9.5v.5"
+              stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          Could not load stats: {statsState.error}
+        </div>
+      )}
+
+      <section aria-label="Issue statistics">
+        <div className="stats-strip">
+          {STAT_ITEMS.map(({ key, label, accent }) => (
+            <div
+              key={key}
+              className="stats-strip-item"
+              style={{ '--stat-accent': accent }}
+            >
+              <span
+                className="stats-strip-value"
+                aria-label={`${label}: ${statsState.loading ? 'loading' : (stats?.[key] ?? 0)}`}
+              >
+                {statsState.loading ? '—' : (stats?.[key] ?? 0)}
+              </span>
+              <span className="stats-strip-label">{label}</span>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* ── Issue list ─────────────────────────────────────── */}
-      <section className="issues-section" aria-label="Issue list">
-        <div className="section-header">
-          <h2 className="section-title">Issues</h2>
-          {!issuesState.loading && (
-            <span className="issue-count">{filtered.length} shown</span>
-          )}
+      {/* ── Issue list ──────────────────────────────────────── */}
+      <section aria-label="Issue list">
+
+        {/* Toolbar: left = label + count, right = filter controls */}
+        <div className="issues-toolbar">
+          <div className="issues-toolbar-left">
+            <span className="issues-toolbar-title">All Issues</span>
+            {!issuesState.loading && (
+              <span
+                className="issues-count-badge"
+                aria-label={`${filtered.length} issues shown`}
+              >
+                {filtered.length}
+              </span>
+            )}
+          </div>
+          <FilterBar
+            filters={filters}
+            onChange={setFilters}
+            onReset={() => setFilters({ ...EMPTY_FILTERS })}
+          />
         </div>
 
-        <FilterBar filters={filters} onChange={setFilters}
-          onReset={() => setFilters({ ...EMPTY_FILTERS })} />
-
+        {/* Loading */}
         {issuesState.loading && (
-          <div className="state-message">Loading issues…</div>
+          <div className="state-message" aria-live="polite">Loading issues…</div>
         )}
 
+        {/* Error */}
         {issuesState.error && (
-          <div className="alert alert-error">Could not load issues: {issuesState.error}</div>
+          <div className="alert alert-error" role="alert">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"
+              aria-hidden="true" style={{ flexShrink: 0, marginTop: 1 }}>
+              <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M7 4v3.5M7 9.5v.5"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Could not load issues: {issuesState.error}
+          </div>
         )}
 
+        {/* Empty state */}
         {!issuesState.loading && !issuesState.error && filtered.length === 0 && (
           <div className="empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle cx="12" cy="12" r="10" stroke="#d1d5db" strokeWidth="1.5" />
-              <path d="M9 9h.01M15 9h.01M9 15s1 1.5 3 1.5 3-1.5 3-1.5" stroke="#d1d5db"
-                strokeWidth="1.5" strokeLinecap="round" />
+            <svg
+              className="empty-state-icon"
+              width="40" height="40" viewBox="0 0 24 24"
+              fill="none" aria-hidden="true"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="4"
+                stroke="currentColor" strokeWidth="1.5" />
+              <path d="M8 8h8M8 12h6M8 16h4"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
-            <p>
-              {issueList.length === 0
-                ? 'No issues yet. Create your first one!'
-                : 'No issues match your filters.'}
-            </p>
-            {issueList.length > 0 && (
-              <button className="btn btn-ghost"
-                onClick={() => setFilters({ ...EMPTY_FILTERS })}>
-                Clear filters
-              </button>
+            {issueList.length === 0 ? (
+              <>
+                <p className="empty-state-title">No issues yet</p>
+                <p className="empty-state-sub">
+                  Use &ldquo;New Issue&rdquo; above to create your first one.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="empty-state-title">No matching issues</p>
+                <p className="empty-state-sub">Try adjusting your search or filters.</p>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ marginTop: 4 }}
+                  onClick={() => setFilters({ ...EMPTY_FILTERS })}
+                >
+                  Clear filters
+                </button>
+              </>
             )}
           </div>
         )}
 
+        {/* Issue rows */}
         {!issuesState.loading && !issuesState.error && filtered.length > 0 && (
-          <div className="issue-list">
+          <div className="issue-list" role="list" aria-label="Issues">
             {filtered.map((issue) => (
-              <IssueCard key={issue._id} issue={issue} onClick={setSelectedIssue} />
+              <IssueCard
+                key={issue._id}
+                issue={issue}
+                onClick={setSelectedIssue}
+              />
             ))}
           </div>
         )}
       </section>
 
-      {/* ── Modals ─────────────────────────────────────────── */}
+      {/* ── Modals ──────────────────────────────────────────── */}
       {(openCreate || editIssue) && (
         <IssueForm
           key={editIssue?._id ?? 'new'}
@@ -185,10 +284,12 @@ export default function Dashboard({ openCreate, onCreateClose }) {
         />
       )}
 
-      {/* ── Toast ──────────────────────────────────────────── */}
+      {/* ── Toast ───────────────────────────────────────────── */}
       {toast && (
-        <div className="toast" role="status" aria-live="polite">{toast}</div>
+        <div className="toast" role="status" aria-live="polite">
+          {toast}
+        </div>
       )}
-    </main>
+    </div>
   );
 }
